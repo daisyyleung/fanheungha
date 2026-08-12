@@ -108,7 +108,7 @@ test("release automation is pinned, read-only in CI, and draft-only for signed t
     read("SBOM.spdx.json"),
   ]);
   for (const workflow of [ci, release]) {
-    assert.match(workflow, /actions\/checkout@d23441a48e516b6c34aea4fa41551a30e30af803/);
+    assert.match(workflow, /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/);
     assert.match(workflow, /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020/);
     assert.match(workflow, /node-version: 22\.13\.0/);
     assert.match(workflow, /persist-credentials: false/);
