@@ -255,7 +255,7 @@ function checkWorkflows() {
   const ci = read(".github/workflows/ci.yml");
   const release = read(".github/workflows/release.yml");
   const dependabot = read(".github/dependabot.yml");
-  const checkoutPin = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803";
+  const checkoutPin = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
   const setupPin = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
   for (const [name, workflow] of [["CI", ci], ["release", release]]) {
     assert(workflow.includes(checkoutPin), `${name} must pin checkout by full SHA`);
