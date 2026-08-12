@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786256541139,
+      "tag": "0000_wise_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786256563856,
+      "tag": "0001_remarkable_thunderball",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786258607190,
+      "tag": "0002_wakeful_namora",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786261195350,
+      "tag": "0003_unknown_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786276372404,
+      "tag": "0004_stale_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786500000000,
+      "tag": "0005_place_sections",
+      "breakpoints": true
+    }
+  ]
+}

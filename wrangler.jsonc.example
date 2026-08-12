@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fanheungha",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "binding": "ASSETS", "directory": "./.vinext" },
+  "images": { "binding": "IMAGES" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fanheungha-db",
+      "database_id": "<YOUR_D1_DATABASE_ID>",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}
