@@ -1,10 +1,15 @@
 import { ensureSchema, HttpError, newId, nowIso, type AppD1 } from "@/db";
-import { FAILED_PIN_ATTEMPT_SQL } from "@/lib/auth-policy";
+import {
+  CLAIM_SETTINGS_SQL,
+  FAILED_PIN_ATTEMPT_SQL,
+  FAILED_SETUP_ATTEMPT_SQL,
+} from "@/lib/auth-policy";
 
 const SESSION_COOKIE = "fanheungha_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_SECONDS * 1000;
 const ATTEMPT_KEY = "household";
+export const SETUP_ATTEMPT_KEY = "owner-setup";
 const LOCKOUT_AFTER = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
 export const PBKDF2_ITERATIONS = 100_000;
@@ -22,7 +27,7 @@ type AttemptRow = {
   locked_until: string | null;
 };
 
-type FailedAttemptResult = {
+export type FailedAttemptResult = {
   failed_count: number;
   locked_until: string | null;
 };
@@ -122,8 +127,26 @@ export async function getSettings(d1: AppD1): Promise<SettingRow | null> {
   return result.results[0] ?? null;
 }
 
-export async function getAttempt(d1: AppD1): Promise<AttemptRow | null> {
-  const result = await d1.prepare("SELECT id, failed_count, locked_until FROM auth_attempts WHERE id = ? LIMIT 1").bind(ATTEMPT_KEY).all<AttemptRow>();
+export async function getAttempt(d1: AppD1, key = ATTEMPT_KEY): Promise<AttemptRow | null> {
+  const result = await d1.prepare("SELECT id, failed_count, locked_until FROM auth_attempts WHERE id = ? LIMIT 1").bind(key).all<AttemptRow>();
+  return result.results[0] ?? null;
+}
+
+function activeLock(attempt: AttemptRow | null, now: number): number {
+  const lockedUntil = attempt?.locked_until ? Date.parse(attempt.locked_until) : 0;
+  return lockedUntil > now ? lockedUntil : 0;
+}
+
+export async function recordSetupFailure(
+  d1: AppD1,
+  now = Date.now(),
+): Promise<FailedAttemptResult | null> {
+  const nowIsoValue = new Date(now).toISOString();
+  const nextLockedUntil = new Date(now + LOCKOUT_MS).toISOString();
+  const result = await d1
+    .prepare(FAILED_SETUP_ATTEMPT_SQL)
+    .bind(SETUP_ATTEMPT_KEY, nowIsoValue, LOCKOUT_AFTER, nextLockedUntil)
+    .all<FailedAttemptResult>();
   return result.results[0] ?? null;
 }
 
@@ -176,25 +199,66 @@ export async function requireSession(request: Request): Promise<{ d1: AppD1; tok
 }
 
 export async function setupPin(d1: AppD1, pin: string): Promise<{ cookie: string }> {
-  const existing = await getSettings(d1);
-  if (existing) throw new HttpError(409, "旅記 PIN 已經設定，請輸入 PIN 解鎖。");
   const salt = toBase64Url(randomBytes(16));
   const hash = await derivePinHash(pin, salt);
   const session = await prepareSession();
+  const createdAt = nowIso();
+  const lockCheckAt = Date.now();
   try {
     const results = await d1.batch([
-      d1
-        .prepare("INSERT INTO settings (id, pin_salt, pin_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(ATTEMPT_KEY, salt, hash, nowIso(), nowIso()),
-      d1
-        .prepare("INSERT INTO auth_attempts (id, failed_count, locked_until, updated_at) VALUES (?, 0, NULL, ?)")
-        .bind(ATTEMPT_KEY, nowIso()),
-      d1
-        .prepare("INSERT INTO auth_sessions (id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?)")
-        .bind(session.id, session.tokenHash, session.createdAt, session.expiresAt),
+      d1.prepare(CLAIM_SETTINGS_SQL).bind(
+        ATTEMPT_KEY,
+        salt,
+        hash,
+        createdAt,
+        createdAt,
+        ATTEMPT_KEY,
+        SETUP_ATTEMPT_KEY,
+        createdAt,
+      ),
+      d1.prepare(`
+        INSERT INTO auth_attempts (id, failed_count, locked_until, updated_at)
+        SELECT ?, 0, NULL, ?
+        WHERE EXISTS (
+          SELECT 1 FROM settings
+          WHERE id = ? AND pin_salt = ? AND pin_hash = ?
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          failed_count = 0,
+          locked_until = NULL,
+          updated_at = excluded.updated_at
+      `).bind(ATTEMPT_KEY, createdAt, ATTEMPT_KEY, salt, hash),
+      d1.prepare(`
+        INSERT INTO auth_attempts (id, failed_count, locked_until, updated_at)
+        SELECT ?, 0, NULL, ?
+        WHERE EXISTS (
+          SELECT 1 FROM settings
+          WHERE id = ? AND pin_salt = ? AND pin_hash = ?
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          failed_count = 0,
+          locked_until = NULL,
+          updated_at = excluded.updated_at
+      `).bind(SETUP_ATTEMPT_KEY, createdAt, ATTEMPT_KEY, salt, hash),
+      d1.prepare(`
+        INSERT INTO auth_sessions (id, token_hash, created_at, expires_at)
+        SELECT ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM settings
+          WHERE id = ? AND pin_salt = ? AND pin_hash = ?
+        )
+      `).bind(session.id, session.tokenHash, session.createdAt, session.expiresAt, ATTEMPT_KEY, salt, hash),
     ]);
-    if ((results[0]?.meta?.changes ?? 0) !== 1) {
-      throw new HttpError(409, "旅記 PIN 已經設定，請輸入 PIN 解鎖。");
+    if ((results[0]?.meta?.changes ?? 0) !== 1 || (results[3]?.meta?.changes ?? 0) !== 1) {
+      const existing = await getSettings(d1);
+      if (existing) throw new HttpError(409, "旅記 PIN 已經設定，請輸入 PIN 解鎖。");
+      const setupLock = activeLock(await getAttempt(d1, SETUP_ATTEMPT_KEY), lockCheckAt);
+      if (setupLock > lockCheckAt) {
+        throw new HttpError(429, "啟用嘗試次數已達上限，請稍後再試。", {
+          retryAfterSeconds: Math.ceil((setupLock - lockCheckAt) / 1000),
+        });
+      }
+      throw new HttpError(409, "未能建立旅記，請稍後再試。");
     }
   } catch (error) {
     if (error instanceof HttpError) throw error;
@@ -211,7 +275,7 @@ export async function unlockPin(d1: AppD1, pin: string): Promise<{ cookie: strin
   if (!settings) throw new HttpError(409, "請先建立 PIN。");
   const attempt = await getAttempt(d1);
   const now = Date.now();
-  const lockedUntil = attempt?.locked_until ? Date.parse(attempt.locked_until) : 0;
+  const lockedUntil = activeLock(attempt, now);
   if (lockedUntil > now) {
     throw new HttpError(429, "PIN 嘗試次數已達上限，請稍後再試。", {
       retryAfterSeconds: Math.ceil((lockedUntil - now) / 1000),

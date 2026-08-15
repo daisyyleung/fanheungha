@@ -62,10 +62,12 @@ test("想食／飲 validates its required name, optional shop and http links", a
 });
 
 test("plan tabs follow the requested order and journals remain itinerary-only", async () => {
-  const page = await read("app/page.tsx");
-  const start = page.indexOf("const tabOptions");
-  const end = page.indexOf("const navigation", start);
-  const options = page.slice(start, end);
+  const [contracts, detail, food] = await Promise.all([
+    read("app/components/contracts.ts"),
+    read("app/components/TripDetail.tsx"),
+    read("app/components/FoodPanel.tsx"),
+  ]);
+  const options = contracts;
   const labels = ["執行李", "臨出發", "想買", "想食／飲", "行程"];
   let cursor = -1;
   for (const label of labels) {
@@ -73,11 +75,11 @@ test("plan tabs follow the requested order and journals remain itinerary-only", 
     assert.ok(next > cursor, `${label} should follow the requested tab order`);
     cursor = next;
   }
-  assert.match(page, /useState<Tab>\("packing"\)/);
-  assert.match(page, /isJournal \? tabOptions\.filter\(\(option\) => option\.value === "itinerary"\)/);
-  assert.match(page, /function FoodPanel/);
-  assert.match(page, /便利店／店舖（可選）/);
-  assert.match(page, /ArchiveManager/);
-  assert.match(page, /MoveButtons/);
-  assert.match(page, /kind: "food"/);
+  assert.match(detail, /useState<Tab>\("packing"\)/);
+  assert.match(detail, /isJournal\s*\?\s*tabOptions\.filter\(\(option\) => option\.value === "itinerary"\)/);
+  assert.match(food, /export function FoodPanel/);
+  assert.match(food, /便利店／店舖（可選）/);
+  assert.match(detail, /ArchiveManager/);
+  assert.match(food, /MoveButtons/);
+  assert.match(food, /kind: "food"/);
 });

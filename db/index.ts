@@ -251,9 +251,18 @@ export function jsonResponse(payload: unknown, status = 200, headers?: HeadersIn
 
 export function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) {
+    const retryAfterSeconds = error.details?.retryAfterSeconds;
+    const headers =
+      error.status === 429 &&
+      typeof retryAfterSeconds === "number" &&
+      Number.isFinite(retryAfterSeconds) &&
+      retryAfterSeconds > 0
+        ? { "retry-after": String(Math.ceil(retryAfterSeconds)) }
+        : undefined;
     return jsonResponse(
       { error: error.message, ...(error.details ? { details: error.details } : {}) },
       error.status,
+      headers,
     );
   }
   console.error(error);
