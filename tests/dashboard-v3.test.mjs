@@ -32,25 +32,30 @@ test("copy contract keeps 日本旅行手帳 as the only product framing", async
 });
 
 test("knowledge ordering puts regional flavours before cuisine categories", async () => {
-  const page = await read("app/page.tsx");
+  const page = await read("app/components/KnowledgeView.tsx");
   assert.ok(page.indexOf("旅程沿線的地方味道") < page.indexOf("日本美食分類"));
 });
 
 test("trip archive contract uses the safe PATCH flow and sibling controls", async () => {
-  const page = await read("app/page.tsx");
+  const page = await Promise.all([
+    read("app/page.tsx"),
+    read("app/components/TripSummaries.tsx"),
+    read("app/components/TripDetail.tsx"),
+    read("app/components/SharedUi.tsx"),
+  ]).then((sources) => sources.join("\n"));
   assert.match(page, /body: JSON\.stringify\(\{ archived: true \}\)/);
   assert.match(page, /即將出發及準備中的清單/);
   assert.match(page, /D1 紀錄會保留，不會刪除/);
-  assert.match(page, /function ArchiveTripButton/);
+  assert.match(page, /export function ArchiveTripButton/);
   assert.match(page, /className="trip-card-actions"/);
   assert.doesNotMatch(page, /<button className="trip-card"/);
   assert.match(page, /allowArchive: boolean/);
-  assert.match(page, /else content = [^\n]*<Overview[^\n]*onArchive=\{archiveTrip\}/);
+  assert.match(page, /<Overview[\s\S]*onArchive=\{archiveTrip\}/);
 });
 
 test("packing items can be removed through the soft-archive flow", async () => {
   const [page, itemRoute] = await Promise.all([
-    read("app/page.tsx"),
+    read("app/components/PackingPanel.tsx"),
     read("app/api/trips/[tripId]/items/route.ts"),
   ]);
   assert.match(page, /async function deleteItem\(item: PackingRecord\)/);
@@ -62,7 +67,7 @@ test("packing items can be removed through the soft-archive flow", async () => {
 });
 
 test("packing list does not label template items as optional", async () => {
-  const page = await read("app/page.tsx");
+  const page = await read("app/components/PackingPanel.tsx");
   assert.doesNotMatch(page, /item\.optional\s*&&\s*<em>可選<\/em>/);
 });
 
@@ -214,7 +219,20 @@ test("layout contract protects mobile targets, drawer scroll, and connector cont
 });
 
 test("CJK canary keeps warm copy and natural wrapping hooks", async () => {
-  const [page, atlas, css] = await Promise.all([read("app/page.tsx"), read("app/FootprintAtlas.tsx"), read("app/globals.css")]);
+  const [page, atlas, css] = await Promise.all([
+    Promise.all([
+      read("app/page.tsx"),
+      read("app/components/AppFrame.tsx"),
+      read("app/components/contracts.ts"),
+      read("app/components/TripSummaries.tsx"),
+      read("app/components/KnowledgeView.tsx"),
+      read("app/components/ImprovementsView.tsx"),
+      read("app/components/ArchiveManager.tsx"),
+      read("app/components/FoodPanel.tsx"),
+    ]).then((sources) => sources.join("\n")),
+    read("app/FootprintAtlas.tsx"),
+    read("app/globals.css"),
+  ]);
   for (const label of ["即將出發", "過往旅記", "日本足跡", "日本小知識", "想改善", "想食／飲", "已收起項目"]) assert.match(page, new RegExp(label));
   assert.match(atlas, /尚未記錄/);
   assert.match(css, /overflow-wrap: anywhere/);
@@ -227,7 +245,23 @@ test("CJK canary keeps warm copy and natural wrapping hooks", async () => {
 
 test("D1 and deletion safety keeps browser storage and hard deletes out", async () => {
   const [page, tripRoute, itemRoute, improvementRoute] = await Promise.all([
-    read("app/page.tsx"),
+    Promise.all([
+      read("app/page.tsx"),
+      read("app/components/AppFrame.tsx"),
+      read("app/components/SharedUi.tsx"),
+      read("app/components/PinGate.tsx"),
+      read("app/components/TripForm.tsx"),
+      read("app/components/TripSummaries.tsx"),
+      read("app/components/KnowledgeView.tsx"),
+      read("app/components/ImprovementsView.tsx"),
+      read("app/components/ArchiveManager.tsx"),
+      read("app/components/ItineraryPanel.tsx"),
+      read("app/components/PackingPanel.tsx"),
+      read("app/components/ShoppingPanel.tsx"),
+      read("app/components/FoodPanel.tsx"),
+      read("app/components/LastMinutePanel.tsx"),
+      read("app/components/TripDetail.tsx"),
+    ]).then((sources) => sources.join("\n")),
     read("app/api/trips/[tripId]/route.ts"),
     read("app/api/trips/[tripId]/items/route.ts"),
     read("app/api/improvements/route.ts"),

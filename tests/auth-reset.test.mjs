@@ -25,10 +25,11 @@ test("PIN reset rotates credentials and sessions in one guarded four-statement b
 });
 
 test("reset endpoint and sidebar enforce the private six-digit confirmation flow", async () => {
-  const [route, auth, page] = await Promise.all([
+  const [route, auth, frame, shared] = await Promise.all([
     read("app/api/auth/reset/route.ts"),
     read("lib/auth.ts"),
-    read("app/page.tsx"),
+    read("app/components/AppFrame.tsx"),
+    read("app/components/SharedUi.tsx"),
   ]);
   assert.match(route, /contentType !== "application\/json"/);
   assert.match(route, /requestOrigin !== new URL\(request\.url\)\.origin/);
@@ -36,8 +37,8 @@ test("reset endpoint and sidebar enforce the private six-digit confirmation flow
   assert.match(route, /pin !== confirmPin/);
   assert.match(auth, /AND pin_salt = \?/);
   assert.match(auth, /INSERT INTO auth_sessions[\s\S]*WHERE EXISTS/);
-  assert.match(page, /重新設定 PIN/);
-  assert.match(page, /autoComplete="new-password"/);
-  assert.match(page, /其他裝置需要用新 PIN 重新解鎖/);
-  assert.doesNotMatch(`${route}\n${auth}\n${page}`, /localStorage|sessionStorage/);
+  assert.match(frame, /重新設定 PIN/);
+  assert.match(frame, /autoComplete="new-password"/);
+  assert.match(frame + shared, /其他裝置需要用新 PIN 重新解鎖/);
+  assert.doesNotMatch(`${route}\n${auth}\n${frame}\n${shared}`, /localStorage|sessionStorage/);
 });

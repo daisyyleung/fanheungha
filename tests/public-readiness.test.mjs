@@ -19,10 +19,11 @@ test("empty D1 starts schema-only with no user seed import or DML", async () => 
 });
 
 test("owner bootstrap requires a one-time secret before PIN work and D1 access", async () => {
-  const [route, auth, page] = await Promise.all([
+  const [route, auth, policy, gate] = await Promise.all([
     read("app/api/auth/setup/route.ts"),
     read("lib/auth.ts"),
-    read("app/page.tsx"),
+    read("lib/auth-policy.ts"),
+    read("app/components/PinGate.tsx"),
   ]);
   assert.match(route, /application\/json/);
   assert.match(route, /requestOrigin !== new URL\(request\.url\)\.origin/);
@@ -33,14 +34,14 @@ test("owner bootstrap requires a one-time secret before PIN work and D1 access",
   assert.match(auth, /crypto\.subtle/);
   assert.match(auth, /safeEqual/);
   assert.match(auth, /constraint failed|unique constraint/i);
-  assert.match(auth, /INSERT INTO settings/);
+  assert.match(`${auth}\n${policy}`, /INSERT INTO settings/);
   assert.match(auth, /INSERT INTO auth_attempts/);
   assert.match(auth, /INSERT INTO auth_sessions/);
   assert.doesNotMatch(route, /jsonResponse\(\{[^}]*setupSecret/);
-  assert.match(page, /owner-setup-secret/);
-  assert.match(page, /type="password"/);
-  assert.match(page, /64 位十六進位啟用密碼/);
-  assert.doesNotMatch(`${route}\n${auth}\n${page}`, /localStorage|sessionStorage/);
+  assert.match(gate, /owner-setup-secret/);
+  assert.match(gate, /type="password"/);
+  assert.match(gate, /64 位十六進位啟用密碼/);
+  assert.doesNotMatch(`${route}\n${auth}\n${gate}`, /localStorage|sessionStorage/);
 });
 
 test("dependency manifest and public identity are internally consistent", async () => {
@@ -141,24 +142,22 @@ test("release automation is pinned, read-only in CI, and draft-only for signed t
 });
 
 test("archive and packing UI invariants remain scoped", async () => {
-  const [routes, page, tripData] = await Promise.all([
+  const [routes, panel, tripData] = await Promise.all([
     Promise.all([
       read("app/api/trips/route.ts"),
       read("app/api/trips/[tripId]/route.ts"),
       read("app/api/trips/[tripId]/items/route.ts"),
       read("app/api/improvements/route.ts"),
     ]),
-    read("app/page.tsx"),
+    read("app/components/PackingPanel.tsx"),
     read("lib/trip-data.ts"),
   ]);
   const routeText = routes.join("\n");
   assert.doesNotMatch(routeText, /\bDELETE\s+FROM\b/i);
   assert.match(routeText, /archived_at/);
-  const start = page.indexOf("function PackingPanel");
-  const end = page.indexOf("function ShoppingEditor", start);
-  assert.ok(start >= 0 && end > start);
-  assert.doesNotMatch(page.slice(start, end), /可選|optional/i);
-  assert.match(page.slice(start, end), /archived:\s*true/);
+  assert.match(panel, /export function PackingPanel/);
+  assert.doesNotMatch(panel, /可選|optional/i);
+  assert.match(panel, /archived:\s*true/);
   assert.match(tripData, /archived_at IS NULL/);
 });
 

@@ -316,6 +316,7 @@ function checkSecurity() {
   const auth = read("lib/auth.ts");
   const authPolicy = read("lib/auth-policy.ts");
   const setupRoute = read("app/api/auth/setup/route.ts");
+  const setupGate = read("app/components/PinGate.tsx");
   const unlockRoute = read("app/api/auth/unlock/route.ts");
   const resetRoute = read("app/api/auth/reset/route.ts");
   const logoutRoute = read("app/api/auth/logout/route.ts");
@@ -333,13 +334,20 @@ function checkSecurity() {
   assert(auth.includes("PBKDF2") && auth.includes("pin_salt") && !/INSERT INTO settings[^\n]*pin[^\n]*\?[^\n]*\?[^\n]*plaintext/i.test(auth), "PIN must not be stored as plaintext");
   assert(auth.includes("HttpOnly; Secure; SameSite=Lax"), "session cookie flags must be secure");
   assert(auth.includes("LOCKOUT_AFTER = 5") && auth.includes("LOCKOUT_MS = 15 * 60 * 1000"), "lockout contract changed");
+  assert(auth.includes('SETUP_ATTEMPT_KEY = "owner-setup"') && auth.includes('ATTEMPT_KEY = "household"'), "PIN and setup attempt keys must remain separate");
   assert(auth.includes("FAILED_PIN_ATTEMPT_SQL") && auth.includes(".all<FailedAttemptResult>()"), "failed PIN attempts must use the atomic returning statement");
   assert(!auth.includes("nextFailedPinCount"), "unlock must not restore the stale JavaScript read-modify-write counter");
   assert(authPolicy.includes("auth_attempts.failed_count + 1"), "failed PIN SQL must increment the stored database count");
   assert(/WHERE EXISTS \([\s\S]*FROM settings[\s\S]*pin_salt = \?[\s\S]*pin_hash = \?/.test(authPolicy), "failed PIN SQL must guard the settings snapshot");
   assert(/locked_until > excluded\.updated_at[\s\S]*THEN auth_attempts\.locked_until/.test(authPolicy), "failed PIN SQL must preserve an active lock");
   assert(/RETURNING\s+failed_count,\s*locked_until/i.test(authPolicy), "failed PIN SQL must return the atomic result state");
-  assert(/INSERT INTO settings[\s\S]*INSERT INTO auth_attempts[\s\S]*INSERT INTO auth_sessions/.test(auth), "owner claim must initialize settings, attempts, and session together");
+  assert(authPolicy.includes("FAILED_SETUP_ATTEMPT_SQL") && /NOT EXISTS\s*\([\s\S]*FROM settings[\s\S]*id = 'household'/i.test(authPolicy), "setup failures must stop after the household is claimed");
+  assert(authPolicy.includes("CLAIM_SETTINGS_SQL") && /locked_until IS NOT NULL[\s\S]*locked_until > \?/i.test(authPolicy), "owner claim must guard the active setup lock");
+  assert(/INSERT INTO settings[\s\S]*INSERT INTO auth_attempts[\s\S]*INSERT INTO auth_sessions/.test(`${authPolicy}\n${auth}`), "owner claim must initialize settings, attempts, and session together");
+  assert(setupRoute.includes("recordSetupFailure") && setupRoute.includes("SETUP_ATTEMPT_KEY"), "setup route must use the independent atomic setup counter");
+  assert(setupGate.includes("owner-setup-secret") && setupGate.includes("64 位十六進位啟用密碼"), "setup gate must keep the one-time secret input contract");
+  assert(!/bind\([^)]*setupSecret|setupSecret[^\n]*(?:INSERT|cookie|jsonResponse|console\.)/i.test(`${auth}\n${setupRoute}`), "setup secret must never enter D1, cookies, responses, or logs");
+  assert(read("db/index.ts").includes('"retry-after"'), "429 responses must expose the retry window through Retry-After");
   assert(/constraint failed|unique constraint/i.test(auth), "concurrent owner claim must map conflicts to a controlled response");
 }
 
@@ -371,11 +379,8 @@ function checkArchive() {
 }
 
 function checkPacking() {
-  const page = read("app/page.tsx");
-  const start = page.indexOf("function PackingPanel");
-  const end = page.indexOf("function ShoppingEditor", start);
-  assert(start >= 0 && end > start, "packing panel is missing");
-  const panel = page.slice(start, end);
+  const panel = read("app/components/PackingPanel.tsx");
+  assert(panel.includes("export function PackingPanel"), "packing panel is missing");
   assert(!/可選|optional/i.test(panel), "packing panel must not display optional labels");
   assert(/archived:\s*true/.test(panel), "packing removal must use archive behavior");
   assert(read("lib/packing-templates.ts").includes("optional"), "packing data model must retain optional compatibility without rendering it");

@@ -16,6 +16,13 @@ SameSite=Lax cookie。連續五次 PIN 錯誤會鎖定 15 分鐘。
 不要把使用者旅程、D1 export、`.dev.vars`、production identifier、API token 或
 其他 secret 提交到公開 repository。漏洞回報方式見 [SECURITY.md](SECURITY.md)。
 
+## 足跡地圖 demo
+
+![日本足跡地圖空白示範](public/footprint-atlas-demo.png)
+
+足跡地圖以 47 個都道府縣的 CSS cartogram 顯示去過與下一站。這張截圖來自全新
+空白 D1，沒有加入使用者旅程、seed 或示例記錄。
+
 ## Fresh clone 安裝
 
 需要 Node.js `>=22.13.0`、npm、Cloudflare 帳戶，以及已登入 Wrangler 的部署

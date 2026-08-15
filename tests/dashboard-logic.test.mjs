@@ -40,14 +40,14 @@ test("a return visit can be shown as both visited and next", () => {
 });
 
 test("date edits are guarded and journal weather exposes its editor", async () => {
-  const [route, page, css] = await Promise.all([
+  const [route, itinerary, css] = await Promise.all([
     readFile(new URL("../app/api/trips/[tripId]/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/ItineraryPanel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(route, /item_date < \? OR item_date > \?/);
   assert.match(route, /新日期範圍會排除已寫好的行程/);
-  assert.match(page, /function WeatherSummary/);
-  assert.match(page, /編輯天氣/);
+  assert.match(itinerary, /function WeatherSummary/);
+  assert.match(itinerary, /編輯天氣/);
   assert.doesNotMatch(css, /min-height:\s*(36|40|42)px/);
 });
